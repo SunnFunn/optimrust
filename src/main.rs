@@ -112,6 +112,7 @@ impl SimplexTable {
             let mut row = self.table.row_mut(exit_row);
             row /= pivot;
         }
+    
         for i in 1..self.table.nrows() {
             if i == exit_row {
                 continue;
@@ -122,11 +123,21 @@ impl SimplexTable {
             exit_row *= factor;
             row += &exit_row;
         }
+        
         self.base = self
             .base
             .iter_mut()
             .map(|x| if *x == exit_var { entry_var } else { *x })
             .collect();
+        
+        // let mut target: f64 = 0.0;
+        // for i in 1..(self.table.nrows() - 1) {
+        //     let c_row = self.table.row(self.table.nrows() - 1).to_owned();
+        //     target += self.table.row(i)[self.table.ncols() - 1]*c_row[self.base[i - 1]];
+        // }
+        // let mut c_row = self.table.row_mut(self.table.nrows() - 1);
+        // c_row[0] = target;
+        // println!{"{}", target}
     }
 
     pub fn solve(&mut self) -> SimplexOutput {
@@ -143,7 +154,8 @@ impl SimplexTable {
             let mut optimum = true;
             let mut unique = true;
             let nrows = self.table.len_of(Axis(0));
-            for (i, &z) in self.table.row(nrows - 1).iter().skip(1).enumerate() {
+            for (i, &z) in self.table.row(nrows - 1).iter().enumerate() {
+                if i == self.table.ncols() - 1 { continue; }
                 optimum = optimum && z <= 0.0;
                 if !self.base.contains(&i) && i < self.objective.len() {
                     unique = unique && z - self.objective[i] < 0.0;
@@ -184,6 +196,10 @@ impl SimplexTable {
             }
         }
         return Some(0.0);
+    }
+
+    pub fn get_target(&self) -> Option<f64> {
+        return Some(self.table.row(self.table.nrows() - 1)[self.table.ncols() - 1]);
     }
 }
 
@@ -265,6 +281,17 @@ impl SimplexMinimizerBuilder {
             .enumerate()
             .filter_map(|(i, x)| if x.is_artificial() || x.is_slack() { Some(i + 1) } else { None })
             .collect();
+        
+        table.push(0.0);
+        for i in 0..vars.len() {
+            let mut delta: f64 = 0.0;
+            for (j, b) in base.iter().enumerate() {
+                delta += table[(j + 1)*(vars.len() + 2) + i + 1]*table[*b];
+            }
+            // println!{"delta: {}, Cj: {}", delta, table[i+1]};
+            delta = delta - table[i+1];
+            table.push(delta);
+        }
 
         let mut target: f64 = 0.0;
         // for it in zip(constraints.clone, base.clone()) {
@@ -275,17 +302,6 @@ impl SimplexMinimizerBuilder {
         }
         println!{"{}", target};
         table.push(target);
-
-        for i in 0..vars.len() {
-            let mut delta: f64 = 0.0;
-            for (j, b) in base.iter().enumerate() {
-                delta += table[(j + 1)*(vars.len() + 2) + i + 1]*table[*b];
-            }
-            // println!{"delta: {}, Cj: {}", delta, table[i+1]};
-            delta = delta - table[i+1];
-            table.push(delta);
-        }
-        table.push(0.0);
 
         let table = Array2::from_shape_vec((base.len() + 2, vars.len() + 2), table);
 
@@ -313,12 +329,12 @@ impl Simplex {
 }
 
 fn main(){
-    let costs = vec![3.0, 4.0, 3.0];
+    let costs = vec![-60.0, -40.0, -80.0, -100.0];
     let program = Simplex::minimize(&costs)
     .with(vec![
-        SimplexConstraint::LessThan(vec![2.0, 1.0, 1.0], 2.0),
-        SimplexConstraint::GreaterThan(vec![3.0, 8.0, 2.0], 1.0),
-        SimplexConstraint::GreaterThan(vec![0.0, 1.0, 1.0], 2.0),
+        SimplexConstraint::LessThan(vec![1.0, 1.0, 1.0, 1.0], 20.0),
+        SimplexConstraint::LessThan(vec![2.0, 6.0, 4.0, 2.0], 60.0),
+        SimplexConstraint::LessThan(vec![4.0, 6.0, 10.0, 4.0], 40.0),
     ]);
 
     let mut simplex = program.unwrap();
@@ -356,8 +372,10 @@ fn main(){
         SimplexOutput::MultipleOptimum(x) => println!("{}", x),
         _ => panic!("No solution or unbounded"),
     }
-    println!("{:?}", simplex.get_var(1));
-    println!("{:?}", simplex.get_var(2));
-    println!("{:?}", simplex.get_var(3));
-    // println!("{:?}", simplex.get_var(4));
+    println!("x1: {:?}", simplex.get_var(1).unwrap());
+    println!("x2: {:?}", simplex.get_var(2).unwrap());
+    println!("x3: {:?}", simplex.get_var(3).unwrap());
+    println!("x4: {:?}", simplex.get_var(4).unwrap());
+
+    println!("target: {:?}", simplex.get_target().unwrap());
 }
