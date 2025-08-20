@@ -1,5 +1,7 @@
 // use std::iter::zip;
 use ndarray::*;
+use redis::{Client,Commands};
+// use clap::{App,Arg};
 
 #[cfg(test)]
 mod test;
@@ -329,12 +331,72 @@ impl Simplex {
 }
 
 fn main(){
-    let costs = vec![-60.0, -40.0, -80.0, -100.0];
-    let program = Simplex::minimize(&costs)
+    let client = Client::open("redis://:alext@127.0.0.1:6379/").unwrap();
+    let mut connection = client.get_connection().unwrap();
+
+    // let _: () = connection.set("name", name).unwrap();
+
+    // let supply_str: String = connection.get("supply").unwrap();
+    // let demand_str: String = connection.get("demand").unwrap();
+    let costs_str: String = connection.get("costs").unwrap();
+
+    // let supply_vec: Vec<&str> = supply_str.split(" ").collect();
+    // let demand_vec: Vec<&str> = demand_str.split(" ").collect();
+    let costs_vec: Vec<&str> = costs_str.split(" ").collect();
+
+    #[derive(Debug)]
+    struct Costs {
+        s_node_ids: Vec<i8>,
+        d_node_ids: Vec<i8>,
+        costs: Vec<f64>,
+    }
+
+    impl Costs {
+        fn new() -> Costs {
+            Costs {
+                s_node_ids: Vec::new(),
+                d_node_ids: Vec::new(),
+                costs: Vec::new(),
+            }
+        }
+
+        fn add_data(&mut self, s_id: i8, d_id: i8, cost: f64) {
+            self.s_node_ids.push(s_id);
+            self.d_node_ids.push(d_id);
+            self.costs.push(cost);
+        }
+    }
+    
+    
+    // let mut supply_f = vec![0.0; supply_vec.len()];
+    // let mut demand_f = vec![0.0; demand_vec.len()];
+    // let mut costs_f = vec![0.0; costs_vec.len()];
+
+    // for (i, s) in supply_vec.iter().enumerate() {
+    //     supply_f[i] = s.parse().unwrap();
+    // }
+    // for (i, d) in demand_vec.iter().enumerate() {
+    //     demand_f[i] = d.parse().unwrap();
+    // }
+    let mut costs_data = Costs::new();
+    for cost in costs_vec.iter() {
+        let c_vec: Vec<&str> = cost.split("_").collect();
+        costs_data.add_data(c_vec[0].parse().unwrap(),
+                            c_vec[1].parse().unwrap(),
+                            c_vec[2].parse().unwrap())
+    }
+
+    println!("Costs: {:?}", costs_data);
+
+    // let costs = vec![3.0, 5.0, 7.0, 4.0, 6.0, 10.0];
+    let program = Simplex::minimize(&costs_data.costs)
     .with(vec![
-        SimplexConstraint::LessThan(vec![1.0, 1.0, 1.0, 1.0], 20.0),
-        SimplexConstraint::LessThan(vec![2.0, 6.0, 4.0, 2.0], 60.0),
-        SimplexConstraint::LessThan(vec![4.0, 6.0, 10.0, 4.0], 40.0),
+        SimplexConstraint::LessThan(vec![1.0, 1.0, 1.0, 0.0, 0.0, 0.0], 70.0),
+        SimplexConstraint::LessThan(vec![0.0, 0.0, 0.0, 1.0, 1.0, 1.0], 50.0),
+        SimplexConstraint::GreaterThan(vec![1.0, 0.0, 0.0, 1.0, 0.0, 0.0], 20.0),
+        SimplexConstraint::GreaterThan(vec![0.0, 1.0, 0.0, 0.0, 1.0, 0.0], 30.0),
+        SimplexConstraint::GreaterThan(vec![0.0, 0.0, 1.0, 0.0, 0.0, 1.0], 40.0),
+        SimplexConstraint::GreaterThan(vec![0.0, 0.0, 0.0, 1.0, 1.0, 1.0], 35.0),
     ]);
 
     let mut simplex = program.unwrap();
@@ -376,6 +438,9 @@ fn main(){
     println!("x2: {:?}", simplex.get_var(2).unwrap());
     println!("x3: {:?}", simplex.get_var(3).unwrap());
     println!("x4: {:?}", simplex.get_var(4).unwrap());
+    println!("x5: {:?}", simplex.get_var(5).unwrap());
+    println!("x6: {:?}", simplex.get_var(6).unwrap());
+    // println!("x7: {:?}", simplex.get_var(7).unwrap());
 
     println!("target: {:?}", simplex.get_target().unwrap());
 }
