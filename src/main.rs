@@ -7,7 +7,7 @@ use redis::{Client,Commands};
 mod test;
 
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub enum SimplexConstraint {
     Equal(Vec<f64>, f64),
     LessThan(Vec<f64>, f64),
@@ -336,12 +336,12 @@ fn main(){
 
     // let _: () = connection.set("name", name).unwrap();
 
-    // let supply_str: String = connection.get("supply").unwrap();
-    // let demand_str: String = connection.get("demand").unwrap();
+    let supply_str: String = connection.get("supply").unwrap();
+    let demand_str: String = connection.get("demand").unwrap();
     let costs_str: String = connection.get("costs").unwrap();
 
-    // let supply_vec: Vec<&str> = supply_str.split(" ").collect();
-    // let demand_vec: Vec<&str> = demand_str.split(" ").collect();
+    let supply_vec: Vec<&str> = supply_str.split(" ").collect();
+    let demand_vec: Vec<&str> = demand_str.split(" ").collect();
     let costs_vec: Vec<&str> = costs_str.split(" ").collect();
 
     #[derive(Debug)]
@@ -386,18 +386,59 @@ fn main(){
                             c_vec[2].parse().unwrap())
     }
 
-    println!("Costs: {:?}", costs_data);
+    let s_size = supply_vec.len();
+    let d_size = demand_vec.len();
+    let problem_size = s_size*d_size;
 
-    // let costs = vec![3.0, 5.0, 7.0, 4.0, 6.0, 10.0];
+    let mut constraints: Vec<SimplexConstraint> = vec![];
+    
+    // let mut d_constraints: Vec<i8> = vec![];
+
+    for (i, s) in supply_vec.iter().enumerate() {
+        let s_vec: Vec<&str> = s.split("_").collect();
+        let s_qty = s_vec[1].parse().unwrap();
+        
+        let mut s_constraint: Vec<f64> = vec![];
+        for p in 0..problem_size {
+            if p >= i*d_size && p < (i + 1)*d_size { s_constraint.push(1.0); }
+            else { s_constraint.push(0.0); }
+        }
+        constraints.push(SimplexConstraint::LessThan(s_constraint, s_qty));
+    }
+    for (j, d) in demand_vec.iter().enumerate() {
+        let d_vec: Vec<&str> = d.split("_").collect();
+        let d_qty = d_vec[1].parse().unwrap();
+
+        let mut d_constraint: Vec<f64> = vec![];
+        for p in 0..problem_size {
+            if s_size >= d_size {
+                if (p + j)%d_size == 0 { d_constraint.push(1.0); }
+                else { d_constraint.push(0.0); }
+            }
+            else {
+                if (p + 2*j)%d_size == 0 { d_constraint.push(1.0); }
+                else { d_constraint.push(0.0); }
+            }
+            
+        }
+        constraints.push(SimplexConstraint::GreaterThan(d_constraint, d_qty));
+    }
+
+    println!("supply_vec: {:?}, size: {}", supply_vec, s_size);
+    println!("demand_vec: {:?}, size: {}" , demand_vec, d_size);
+    println!("Costs: {:?}", costs_data);
+    println!("constraints: {:?}", constraints);
+
     let program = Simplex::minimize(&costs_data.costs)
-    .with(vec![
-        SimplexConstraint::LessThan(vec![1.0, 1.0, 1.0, 0.0, 0.0, 0.0], 70.0),
-        SimplexConstraint::LessThan(vec![0.0, 0.0, 0.0, 1.0, 1.0, 1.0], 50.0),
-        SimplexConstraint::GreaterThan(vec![1.0, 0.0, 0.0, 1.0, 0.0, 0.0], 20.0),
-        SimplexConstraint::GreaterThan(vec![0.0, 1.0, 0.0, 0.0, 1.0, 0.0], 30.0),
-        SimplexConstraint::GreaterThan(vec![0.0, 0.0, 1.0, 0.0, 0.0, 1.0], 40.0),
-        SimplexConstraint::GreaterThan(vec![0.0, 0.0, 0.0, 1.0, 1.0, 1.0], 35.0),
-    ]);
+    .with(constraints);
+    // .with(vec![
+    //     SimplexConstraint::LessThan(vec![1.0, 1.0, 1.0, 0.0, 0.0, 0.0], 70.0),
+    //     SimplexConstraint::LessThan(vec![0.0, 0.0, 0.0, 1.0, 1.0, 1.0], 50.0),
+    //     SimplexConstraint::GreaterThan(vec![1.0, 0.0, 0.0, 1.0, 0.0, 0.0], 20.0),
+    //     SimplexConstraint::GreaterThan(vec![0.0, 1.0, 0.0, 0.0, 1.0, 0.0], 30.0),
+    //     SimplexConstraint::GreaterThan(vec![0.0, 0.0, 1.0, 0.0, 0.0, 1.0], 40.0),
+    //     SimplexConstraint::GreaterThan(vec![0.0, 0.0, 0.0, 1.0, 1.0, 1.0], 35.0),
+    // ]);
 
     let mut simplex = program.unwrap();
     // let entr: usize = simplex.get_entry_var().unwrap();

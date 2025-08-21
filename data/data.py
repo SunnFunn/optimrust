@@ -11,7 +11,7 @@ def data_initialize(supply_length, demand_length,
     total_qty_s = 0
     for i in range(supply_length):
         random_qty_s = random.randint(10,100)
-        RailRoads_supply += f"1{i}_{random_qty_s} "
+        RailRoads_supply += f"1{i}_{random_qty_s}.0 "
 
         total_qty_s += random_qty_s
 
@@ -20,16 +20,16 @@ def data_initialize(supply_length, demand_length,
     total_qty_d = 0
     for j in range(demand_length):
         random_qty_d = random.randint(10,100)
-        RailRoads_demand += f"2{j}_{random_qty_d} "
+        RailRoads_demand += f"2{j}_{random_qty_d}.0 "
 
         total_qty_d += random_qty_d
 
     if total_qty_d > total_qty_s:
         d_surplus = total_qty_d - total_qty_s
-        RailRoads_supply += f"30_{d_surplus} "
+        RailRoads_supply += f"30_{d_surplus}.0 "
     elif total_qty_d < total_qty_s:
         s_surplus = total_qty_s - total_qty_d
-        RailRoads_demand += f"30_{s_surplus} "
+        RailRoads_demand += f"30_{s_surplus}.0 "
     
     RailRoads_supply = RailRoads_supply.strip(" ")
     RailRoads_demand = RailRoads_demand.strip(" ")
@@ -53,6 +53,6 @@ def data_initialize(supply_length, demand_length,
 
 
 if __name__ == "__main__":
-    data = data_initialize(supply_length=2, demand_length=2,
+    data = data_initialize(supply_length=3, demand_length=2,
                            host="0.0.0.0", port=6379, db=0, password="alext")
-    # print(data)
+    # print(data[:2])
