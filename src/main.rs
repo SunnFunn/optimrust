@@ -1,11 +1,13 @@
 // use std::iter::zip;
 use ndarray::*;
+use redis::{Client,Commands};
+// use clap::{App,Arg};
 
 #[cfg(test)]
 mod test;
 
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub enum SimplexConstraint {
     Equal(Vec<f64>, f64),
     LessThan(Vec<f64>, f64),
@@ -112,6 +114,7 @@ impl SimplexTable {
             let mut row = self.table.row_mut(exit_row);
             row /= pivot;
         }
+    
         for i in 1..self.table.nrows() {
             if i == exit_row {
                 continue;
@@ -122,11 +125,21 @@ impl SimplexTable {
             exit_row *= factor;
             row += &exit_row;
         }
+        
         self.base = self
             .base
             .iter_mut()
             .map(|x| if *x == exit_var { entry_var } else { *x })
             .collect();
+        
+        // let mut target: f64 = 0.0;
+        // for i in 1..(self.table.nrows() - 1) {
+        //     let c_row = self.table.row(self.table.nrows() - 1).to_owned();
+        //     target += self.table.row(i)[self.table.ncols() - 1]*c_row[self.base[i - 1]];
+        // }
+        // let mut c_row = self.table.row_mut(self.table.nrows() - 1);
+        // c_row[0] = target;
+        // println!{"{}", target}
     }
 
     pub fn solve(&mut self) -> SimplexOutput {
@@ -143,7 +156,8 @@ impl SimplexTable {
             let mut optimum = true;
             let mut unique = true;
             let nrows = self.table.len_of(Axis(0));
-            for (i, &z) in self.table.row(nrows - 1).iter().skip(1).enumerate() {
+            for (i, &z) in self.table.row(nrows - 1).iter().enumerate() {
+                if i == self.table.ncols() - 1 { continue; }
                 optimum = optimum && z <= 0.0;
                 if !self.base.contains(&i) && i < self.objective.len() {
                     unique = unique && z - self.objective[i] < 0.0;
@@ -184,6 +198,10 @@ impl SimplexTable {
             }
         }
         return Some(0.0);
+    }
+
+    pub fn get_target(&self) -> Option<f64> {
+        return Some(self.table.row(self.table.nrows() - 1)[self.table.ncols() - 1]);
     }
 }
 
@@ -265,6 +283,17 @@ impl SimplexMinimizerBuilder {
             .enumerate()
             .filter_map(|(i, x)| if x.is_artificial() || x.is_slack() { Some(i + 1) } else { None })
             .collect();
+        
+        table.push(0.0);
+        for i in 0..vars.len() {
+            let mut delta: f64 = 0.0;
+            for (j, b) in base.iter().enumerate() {
+                delta += table[(j + 1)*(vars.len() + 2) + i + 1]*table[*b];
+            }
+            // println!{"delta: {}, Cj: {}", delta, table[i+1]};
+            delta = delta - table[i+1];
+            table.push(delta);
+        }
 
         let mut target: f64 = 0.0;
         // for it in zip(constraints.clone, base.clone()) {
@@ -275,17 +304,6 @@ impl SimplexMinimizerBuilder {
         }
         println!{"{}", target};
         table.push(target);
-
-        for i in 0..vars.len() {
-            let mut delta: f64 = 0.0;
-            for (j, b) in base.iter().enumerate() {
-                delta += table[(j + 1)*(vars.len() + 2) + i + 1]*table[*b];
-            }
-            // println!{"delta: {}, Cj: {}", delta, table[i+1]};
-            delta = delta - table[i+1];
-            table.push(delta);
-        }
-        table.push(0.0);
 
         let table = Array2::from_shape_vec((base.len() + 2, vars.len() + 2), table);
 
@@ -313,13 +331,114 @@ impl Simplex {
 }
 
 fn main(){
-    let costs = vec![3.0, 4.0, 3.0];
-    let program = Simplex::minimize(&costs)
-    .with(vec![
-        SimplexConstraint::LessThan(vec![2.0, 1.0, 1.0], 2.0),
-        SimplexConstraint::GreaterThan(vec![3.0, 8.0, 2.0], 1.0),
-        SimplexConstraint::GreaterThan(vec![0.0, 1.0, 1.0], 2.0),
-    ]);
+    let client = Client::open("redis://:alext@127.0.0.1:6379/").unwrap();
+    let mut connection = client.get_connection().unwrap();
+
+    // let _: () = connection.set("name", name).unwrap();
+
+    let supply_str: String = connection.get("supply").unwrap();
+    let demand_str: String = connection.get("demand").unwrap();
+    let costs_str: String = connection.get("costs").unwrap();
+
+    let supply_vec: Vec<&str> = supply_str.split(" ").collect();
+    let demand_vec: Vec<&str> = demand_str.split(" ").collect();
+    let costs_vec: Vec<&str> = costs_str.split(" ").collect();
+
+    #[derive(Debug)]
+    struct Costs {
+        s_node_ids: Vec<i8>,
+        d_node_ids: Vec<i8>,
+        costs: Vec<f64>,
+    }
+
+    impl Costs {
+        fn new() -> Costs {
+            Costs {
+                s_node_ids: Vec::new(),
+                d_node_ids: Vec::new(),
+                costs: Vec::new(),
+            }
+        }
+
+        fn add_data(&mut self, s_id: i8, d_id: i8, cost: f64) {
+            self.s_node_ids.push(s_id);
+            self.d_node_ids.push(d_id);
+            self.costs.push(cost);
+        }
+    }
+    
+    
+    // let mut supply_f = vec![0.0; supply_vec.len()];
+    // let mut demand_f = vec![0.0; demand_vec.len()];
+    // let mut costs_f = vec![0.0; costs_vec.len()];
+
+    // for (i, s) in supply_vec.iter().enumerate() {
+    //     supply_f[i] = s.parse().unwrap();
+    // }
+    // for (i, d) in demand_vec.iter().enumerate() {
+    //     demand_f[i] = d.parse().unwrap();
+    // }
+    let mut costs_data = Costs::new();
+    for cost in costs_vec.iter() {
+        let c_vec: Vec<&str> = cost.split("_").collect();
+        costs_data.add_data(c_vec[0].parse().unwrap(),
+                            c_vec[1].parse().unwrap(),
+                            c_vec[2].parse().unwrap())
+    }
+
+    let s_size = supply_vec.len();
+    let d_size = demand_vec.len();
+    let problem_size = s_size*d_size;
+
+    let mut constraints: Vec<SimplexConstraint> = vec![];
+    
+    // let mut d_constraints: Vec<i8> = vec![];
+
+    for (i, s) in supply_vec.iter().enumerate() {
+        let s_vec: Vec<&str> = s.split("_").collect();
+        let s_qty = s_vec[1].parse().unwrap();
+        
+        let mut s_constraint: Vec<f64> = vec![];
+        for p in 0..problem_size {
+            if p >= i*d_size && p < (i + 1)*d_size { s_constraint.push(1.0); }
+            else { s_constraint.push(0.0); }
+        }
+        constraints.push(SimplexConstraint::LessThan(s_constraint, s_qty));
+    }
+    for (j, d) in demand_vec.iter().enumerate() {
+        let d_vec: Vec<&str> = d.split("_").collect();
+        let d_qty = d_vec[1].parse().unwrap();
+
+        let mut d_constraint: Vec<f64> = vec![];
+        for p in 0..problem_size {
+            if s_size >= d_size {
+                if (p + j)%d_size == 0 { d_constraint.push(1.0); }
+                else { d_constraint.push(0.0); }
+            }
+            else {
+                if (p + 2*j)%d_size == 0 { d_constraint.push(1.0); }
+                else { d_constraint.push(0.0); }
+            }
+            
+        }
+        constraints.push(SimplexConstraint::GreaterThan(d_constraint, d_qty));
+    }
+
+    println!("supply_vec: {:?}, size: {}", supply_vec, s_size);
+    println!("demand_vec: {:?}, size: {}" , demand_vec, d_size);
+    println!("Costs: {:?}", costs_data);
+    println!("constraints: {:?}", constraints);
+
+    let program = Simplex::minimize(&costs_data.costs)
+    .with(constraints);
+    // .with(vec![
+    //     SimplexConstraint::LessThan(vec![1.0, 1.0, 1.0, 0.0, 0.0, 0.0], 70.0),
+    //     SimplexConstraint::LessThan(vec![0.0, 0.0, 0.0, 1.0, 1.0, 1.0], 50.0),
+    //     SimplexConstraint::GreaterThan(vec![1.0, 0.0, 0.0, 1.0, 0.0, 0.0], 20.0),
+    //     SimplexConstraint::GreaterThan(vec![0.0, 1.0, 0.0, 0.0, 1.0, 0.0], 30.0),
+    //     SimplexConstraint::GreaterThan(vec![0.0, 0.0, 1.0, 0.0, 0.0, 1.0], 40.0),
+    //     SimplexConstraint::GreaterThan(vec![0.0, 0.0, 0.0, 1.0, 1.0, 1.0], 35.0),
+    // ]);
 
     let mut simplex = program.unwrap();
     // let entr: usize = simplex.get_entry_var().unwrap();
@@ -356,8 +475,13 @@ fn main(){
         SimplexOutput::MultipleOptimum(x) => println!("{}", x),
         _ => panic!("No solution or unbounded"),
     }
-    println!("{:?}", simplex.get_var(1));
-    println!("{:?}", simplex.get_var(2));
-    println!("{:?}", simplex.get_var(3));
-    // println!("{:?}", simplex.get_var(4));
+    println!("x1: {:?}", simplex.get_var(1).unwrap());
+    println!("x2: {:?}", simplex.get_var(2).unwrap());
+    println!("x3: {:?}", simplex.get_var(3).unwrap());
+    println!("x4: {:?}", simplex.get_var(4).unwrap());
+    println!("x5: {:?}", simplex.get_var(5).unwrap());
+    println!("x6: {:?}", simplex.get_var(6).unwrap());
+    // println!("x7: {:?}", simplex.get_var(7).unwrap());
+
+    println!("target: {:?}", simplex.get_target().unwrap());
 }
