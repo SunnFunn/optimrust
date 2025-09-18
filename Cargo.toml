@@ -4,6 +4,6 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-ndarray = "0.16.1"
+array2d = "0.3.2"
 redis = "0.32.5"
 simplex = "1.0.0"
