@@ -12,7 +12,7 @@ def data_initialize(supply_length, demand_length,
     RailRoads_supply = ""
     total_qty_s = 0
     for i in range(supply_length):
-        random_qty_s = random.randint(1,10)
+        random_qty_s = random.randint(1,50)
         RailRoads_supply += f"{i}_{random_qty_s} "
 
         total_qty_s += random_qty_s
@@ -50,10 +50,10 @@ def data_initialize(supply_length, demand_length,
     costs = ""
     for s in RailRoads_supply.split(" "):
         for d in RailRoads_demand.split(" "):
-            random_cost = random.randint(1,16)
+            random_cost = random.randint(1,10)
             s_id = s.split("_")[0]
             d_id = d.split("_")[0]
-            costs += f"{s_id}_{d_id}_{random_cost}.0 "
+            costs += f"{s_id}_{d_id}_{random_cost} "
     
     costs = costs.strip(" ")
     
@@ -66,6 +66,6 @@ def data_initialize(supply_length, demand_length,
 
 
 if __name__ == "__main__":
-    data = data_initialize(supply_length=10, demand_length=10,
+    data = data_initialize(supply_length=100, demand_length=100,
                            host="0.0.0.0", port=6379, db=0, password="alext")
     # print(data[:])
