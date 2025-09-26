@@ -125,10 +125,12 @@ impl SimplexTable {
         }
 
         for row in 0..self.table.num_rows() {
+            if self.table[(row, entry_var)] == 0 { continue; }
             let factor = self.table[(row, entry_var)]/pivot;
             if row == 0 || row == exit_row_idx { continue; }
             else {
                 for col in 0..self.table.num_columns() {
+                    if self.table[(exit_row_idx, col)] == 0 { continue; }
                     let pivot_col = self.table[(exit_row_idx, col)];
                     self.table[(row, col)] -= factor*pivot_col;
                 }
