@@ -1,9 +1,8 @@
 use redis::{Client,Commands};
-use array2d::{Array2D, Error};
 
 use crate::node;
 
-pub fn get() -> Result<(Vec::<node::Node>, usize, usize), String> {
+pub fn get() -> Result<(Vec<node::Node>, usize, usize), String> {
     // raw data retreiving from redis db in docker container and processing them
     //-------------------------------------------------------------------------------------
     let client = Client::open("redis://:alext@127.0.0.1:6379/").unwrap();
@@ -53,5 +52,6 @@ pub fn get() -> Result<(Vec::<node::Node>, usize, usize), String> {
                                                 d_qt,
                                                 cost_data[2]));
     }
+
     Ok((optim_task_vec, s_task_size, d_task_size))
 }

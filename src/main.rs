@@ -1,7 +1,8 @@
 #[allow(dead_code)]
 use redis::{Client,Commands};
 use std::time::Instant;
-use array2d::{Array2D, Error};
+use ndarray::Array;
+// use ndarray::ShapeBuilder;
 
 mod node;
 mod greedy;
@@ -26,11 +27,16 @@ fn main () {
 
     // Initialize task matrix as 2D array from task vector
     //-------------------------------------------------------------------------------------
-    let mut optim_task_arr = Array2D::from_row_major(&optim_task_vec, s_task_size, d_task_size).unwrap();
+    let mut optim_task_array2d = Array::from_vec(optim_task_vec.clone())
+                                .clone()
+                                .into_shape_with_order((s_task_size, d_task_size))
+                                .unwrap();
+
+    // println!("{:?}", optim_task_array2d);
 
     // Perform greedy optimization
     //-------------------------------------------------------------------------------------
-    greedy::greedy(&mut optim_task_arr, &mut optim_task_vec);
+    greedy::greedy(&mut optim_task_vec, &mut optim_task_array2d);
     
     // Printout results
     //-------------------------------------------------------------------------------------
@@ -39,8 +45,8 @@ fn main () {
     let mut total_asiignment_qty = 0;
     let mut total_cost = 0;
 
-    for row_iter in optim_task_arr.rows_iter() {
-        for col in row_iter {
+    for row in optim_task_array2d.rows() {
+        for col in row.iter() {
             s_total += col.s_qty;
             d_total += col.d_qty;
             total_asiignment_qty += col.node_qty;
@@ -56,16 +62,33 @@ fn main () {
     let elapsed = now1.elapsed();
     println!("Elapsed: {:.2?}", elapsed);
 
-    let mut costs_to_redis: String = "".to_string();
-    for row_iter in optim_task_arr.rows_iter() {
-        for col in row_iter {
-            costs_to_redis += &(col.node_qty.to_string());
-            costs_to_redis += "_";
-        }
-    } 
-    let _: () = connection.set("initial_solve", &costs_to_redis).unwrap();
+    // // Initial feasible solution for CBC solver
+    // //-------------------------------------------------------------------------------------
+    // let mut costs_to_redis: String = "".to_string();
+    // for row_iter in optim_task_arr.rows_iter() {
+    //     for col in row_iter {
+    //         costs_to_redis += &(col.node_qty.to_string());
+    //         costs_to_redis += "_";
+    //     }
+    // } 
+    // let _: () = connection.set("initial_solve", &costs_to_redis).unwrap();
+
+    // // Initial basis forming
+    // //-------------------------------------------------------------------------------------
+    // let mut initial_basis_vec: Vec<usize> = Vec::<usize>::new();
+
+    // for row_iter in optim_task_arr.rows_iter() {
+    //     for node in row_iter {
+    //         let node_id = node.s_node_id*optim_task_arr.num_columns() + node.d_node_id;
+    //         if node.node_qty != 0 {
+    //             initial_basis_vec.push(node_id);
+    //         }
+    //         print!("node_id: {} qty: {}  ", node_id, node.node_qty);
+    //     }
+    // }
+    // println!("{:?}", initial_basis_vec);
 
     // Perform simplex optimization
     //-------------------------------------------------------------------------------------
-    simplex::simplex_optimize();
+    // simplex::simplex_optimize();
 }

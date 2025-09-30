@@ -10,16 +10,16 @@ pub struct Node {
 }
 
 impl Node {
-    pub fn new() -> Node{
-        Node {
-            s_node_id: 0,
-            s_qty: 0,
-            d_node_id: 0,
-            d_qty: 0,
-            node_cost: 0,
-            node_qty: 0,
-        }
-    }
+    // pub fn new() -> Node{
+    //     Node {
+    //         s_node_id: 0,
+    //         s_qty: 0,
+    //         d_node_id: 0,
+    //         d_qty: 0,
+    //         node_cost: 0,
+    //         node_qty: 0,
+    //     }
+    // }
 
     pub fn new_with_data(s_id: &str, d_id: &str, s_qt: i32, d_qt: i32, cost: &str) -> Node{
         Node {

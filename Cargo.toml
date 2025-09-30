@@ -4,5 +4,5 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-array2d = "0.3.2"
+ndarray = { version = "0.16.1", features = ["rayon", "blas"] }
 redis = "0.32.5"
