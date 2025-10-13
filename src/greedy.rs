@@ -11,17 +11,22 @@
 use crate::node;
 use ndarray::Array;
 use ndarray::Dim;
+use rayon::prelude::*;
+// use ndarray::parallel::prelude::*;
 
+// ####################### Greedy algo: ##################################################
 pub fn greedy (task_vec: &mut Vec<node::Node,>, task_array2d: &mut Array<node::Node, Dim<[usize; 2]>>) {
     // Sorting nodes vec by cost with custom comparator function
-    task_vec.sort_by_key(|node| node.node_cost as i32);
+    // task_vec.sort_by_key(|node| node.node_cost as i32);
+    // task_vec.par_sort_unstable_by_key(|node| node.node_cost as i32);
+    task_vec.par_sort_by(|a, b| a.node_cost.partial_cmp(&b.node_cost).unwrap());
     
     // let task_size: usize = task_vec.len();
     let s_size: usize = task_array2d.nrows();
     let d_size: usize = task_array2d.ncols();
 
     // perform greedy algorithm
-    for node in task_vec.iter() {
+    for node in task_vec.into_iter() {
         let s_idx = node.s_node_id as usize;
         let d_idx = node.d_node_id as usize;
 
@@ -29,6 +34,9 @@ pub fn greedy (task_vec: &mut Vec<node::Node,>, task_array2d: &mut Array<node::N
         let d_qty = task_array2d[(s_idx, d_idx)].d_qty;
 
         if s_qty >= d_qty && d_qty != 0 {
+            // task_array2d.row_mut(s_idx).par_map_inplace(|node| node.s_qty = s_qty - d_qty);
+            // task_array2d.column_mut(d_idx).par_map_inplace(|node| node.d_qty = 0);
+
             for j in 0..d_size{
                 task_array2d[(s_idx, j)].s_qty = s_qty - d_qty;
             }
@@ -38,6 +46,9 @@ pub fn greedy (task_vec: &mut Vec<node::Node,>, task_array2d: &mut Array<node::N
             task_array2d[(s_idx, d_idx)].node_qty = d_qty;
         }
         else if d_qty > s_qty && s_qty != 0 {
+            // task_array2d.row_mut(s_idx).par_map_inplace(|node| node.s_qty = 0);
+            // task_array2d.column_mut(d_idx).par_map_inplace(|node| node.d_qty = d_qty - s_qty);
+
             for j in 0..d_size{
                 task_array2d[(s_idx, j)].s_qty = 0;
             }

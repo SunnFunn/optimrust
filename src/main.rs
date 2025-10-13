@@ -1,5 +1,5 @@
 #[allow(dead_code)]
-use redis::{Client,Commands};
+use redis::Client;
 use std::time::Instant;
 use ndarray::Array;
 // use ndarray::ShapeBuilder;
@@ -11,12 +11,12 @@ mod getdata;
 
 
 fn main () {
-    let now1 = Instant::now();
+    let now = Instant::now();
 
-    // rset connection to redis DB
-    //-------------------------------------------------------------------------------------
-    let client = Client::open("redis://:alext@127.0.0.1:6379/").unwrap();
-    let mut connection = client.get_connection().unwrap();
+    // // rset connection to redis DB
+    // //-------------------------------------------------------------------------------------
+    // let client = Client::open("redis://:alext@127.0.0.1:6379/").unwrap();
+    // let mut connection = client.get_connection().unwrap();
 
     // get task vector & task sizes
     //-------------------------------------------------------------------------------------
@@ -59,8 +59,7 @@ fn main () {
     println!("Total left supply: {}", s_total);
     println!("Total left demand: {}", d_total);
 
-    let elapsed = now1.elapsed();
-    println!("Elapsed: {:.2?}", elapsed);
+    
 
     // // Initial feasible solution for CBC solver
     // //-------------------------------------------------------------------------------------
@@ -90,5 +89,8 @@ fn main () {
 
     // Perform simplex optimization
     //-------------------------------------------------------------------------------------
-    // simplex::simplex_optimize();
+    simplex::simplex_optimize();
+
+    let elapsed = now.elapsed();
+    println!("Elapsed: {:.2?}", elapsed);
 }

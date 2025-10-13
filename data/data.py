@@ -68,6 +68,6 @@ def data_initialize(supply_length, demand_length,
 
 
 if __name__ == "__main__":
-    data = data_initialize(supply_length=2000, demand_length=2000,
+    data = data_initialize(supply_length=2, demand_length=2,
                            host="0.0.0.0", port=6379, db=0, password="alext")
     # print(data[:])
