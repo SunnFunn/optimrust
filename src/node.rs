@@ -1,5 +1,5 @@
 #[allow(dead_code)]
-#[derive(Debug, PartialEq, Copy, Clone)]
+#[derive(Debug, PartialEq, Copy, Clone, Ord, PartialOrd, Eq)]
 pub struct Node {
     pub s_node_id: usize,
     pub s_qty: i32,
@@ -7,6 +7,7 @@ pub struct Node {
     pub d_qty: i32,
     pub node_cost: i32,
     pub node_qty: i32,
+    pub dpref: i32,
 }
 
 impl Node {
@@ -29,6 +30,7 @@ impl Node {
             d_qty: d_qt,
             node_cost: cost.parse().unwrap(),
             node_qty: 0,
+            dpref: 2,
         }
     }
 }

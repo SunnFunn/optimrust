@@ -6,6 +6,8 @@ use ndarray::Array;
 
 mod node;
 mod greedy;
+mod fogel;
+mod dpreference;
 mod simplex;
 mod getdata;
 
@@ -32,29 +34,72 @@ fn main () {
                                 .into_shape_with_order((s_task_size, d_task_size))
                                 .unwrap();
 
+    let mut optim_task_array2d_copy = optim_task_array2d.clone();
+
     // println!("{:?}", optim_task_array2d);
 
     // Perform greedy optimization
     //-------------------------------------------------------------------------------------
     greedy::greedy(&mut optim_task_vec, &mut optim_task_array2d);
+
+    // Perform double preference optimization
+    //-------------------------------------------------------------------------------------
+    dpreference::dpreference(&mut optim_task_array2d_copy);
+
+    // Perform fogel optimization
+    //-------------------------------------------------------------------------------------
+    // fogel::fogel(&mut optim_task_array2d_copy);
     
     // Printout results
     //-------------------------------------------------------------------------------------
     let mut s_total = 0;
     let mut d_total = 0;
-    let mut total_asiignment_qty = 0;
+    let mut total_assignment_qty = 0;
     let mut total_cost = 0;
 
     for row in optim_task_array2d.rows() {
+        s_total += row[0].s_qty;
+    }
+
+    for col in optim_task_array2d.columns() {
+        d_total += col[0].d_qty;
+    }
+
+    for row in optim_task_array2d.rows() {
         for col in row.iter() {
-            s_total += col.s_qty;
-            d_total += col.d_qty;
-            total_asiignment_qty += col.node_qty;
+            total_assignment_qty += col.node_qty;
             total_cost += col.node_qty*(col.node_cost as i32);
         }
     }
     
-    println!("Total assignment qty: {}", total_asiignment_qty);
+    println!("Total assignment qty: {}", total_assignment_qty);
+    println!("Total problem cost: {}", total_cost);
+    println!("Total left supply: {}", s_total);
+    println!("Total left demand: {}", d_total);
+
+    // Printout results dpref
+    //-------------------------------------------------------------------------------------
+    let mut s_total = 0;
+    let mut d_total = 0;
+    let mut total_assignment_qty = 0;
+    let mut total_cost = 0;
+
+    for row in optim_task_array2d_copy.rows() {
+        s_total += row[0].s_qty;
+    }
+
+    for col in optim_task_array2d_copy.columns() {
+        d_total += col[0].d_qty;
+    }
+
+    for row in optim_task_array2d_copy.rows() {
+        for col in row.iter() {
+            total_assignment_qty += col.node_qty;
+            total_cost += col.node_qty*(col.node_cost as i32);
+        }
+    }
+    
+    println!("Total assignment qty: {}", total_assignment_qty);
     println!("Total problem cost: {}", total_cost);
     println!("Total left supply: {}", s_total);
     println!("Total left demand: {}", d_total);
@@ -89,7 +134,7 @@ fn main () {
 
     // Perform simplex optimization
     //-------------------------------------------------------------------------------------
-    simplex::simplex_optimize();
+    // simplex::simplex_optimize();
 
     let elapsed = now.elapsed();
     println!("Elapsed: {:.2?}", elapsed);

@@ -2,47 +2,42 @@ import random
 import redis
 
 
+def generater_random_list(rand_list, total_amount, node_amount, length):
+    for i in range(length):
+        rand_num = random.randint(1, node_amount)
+        rand_list.append(rand_num)
+        if i == length - 1 and sum(rand_list) < total_amount:
+            diff = total_amount - sum(rand_list)
+            residue = diff%length
+            share = diff//length
+            rand_list = [ele + share for ele in rand_list]
+            rand_list[-1] += residue
+    return rand_list
+
+
 def data_initialize(supply_length, demand_length,
                     host, port, db, password):
     r = redis.Redis(host=host, port=port, db=db, password=password)
 
-    Total_Qty = 0
+    s_node_qty = 30
 
     # defining list of supply roads and its ids glued in one string
     RailRoads_supply = ""
-    total_qty_s = 0
+    supply_list =  generater_random_list(rand_list=[],
+                                total_amount=supply_length*s_node_qty,
+                                node_amount=s_node_qty,
+                                length=supply_length)
     for i in range(supply_length):
-        random_qty_s = random.randint(1,50)
-        RailRoads_supply += f"{i}_{random_qty_s} "
-
-        total_qty_s += random_qty_s
+        RailRoads_supply += f"{i}_{supply_list[i]} "
 
     # defining list of demand roads and its ids glued in one string
     RailRoads_demand = ""
-    total_qty_d = 0
-    for j in range(demand_length):
-        random_qty_d = random.randint(1,50)
-        RailRoads_demand += f"{j}_{random_qty_d} "
-
-        total_qty_d += random_qty_d
-
-    if total_qty_d > total_qty_s:
-        d_surplus = total_qty_d - total_qty_s
-        RailRoads_supply += f"{supply_length}_{d_surplus} "
-
-        Total_Qty += total_qty_s
-        Total_Qty += total_qty_d
-        Total_Qty += d_surplus
-        print(Total_Qty)
-
-    elif total_qty_d < total_qty_s:
-        s_surplus = total_qty_s - total_qty_d
-        RailRoads_demand += f"{demand_length}_{s_surplus} "
-
-        Total_Qty += total_qty_s
-        Total_Qty += total_qty_d
-        Total_Qty += s_surplus
-        print(Total_Qty)
+    demand_list =  generater_random_list(rand_list=[],
+                                total_amount=demand_length*s_node_qty,
+                                node_amount=s_node_qty,
+                                length=demand_length)
+    for i in range(demand_length):
+        RailRoads_demand += f"{i}_{demand_list[i]} "
     
     RailRoads_supply = RailRoads_supply.strip(" ")
     RailRoads_demand = RailRoads_demand.strip(" ")
@@ -68,6 +63,12 @@ def data_initialize(supply_length, demand_length,
 
 
 if __name__ == "__main__":
-    data = data_initialize(supply_length=2, demand_length=2,
+    # node_amount = 30
+    # length = 2
+    # rand_list =  generater_random_list(rand_list=[],
+    #                             total_amount=length*node_amount,
+    #                             node_amount=node_amount,
+    #                             length=length)
+    data = data_initialize(supply_length=450, demand_length=450,
                            host="0.0.0.0", port=6379, db=0, password="alext")
     # print(data[:])

@@ -98,6 +98,7 @@ impl SimplexTable {
         let ncols = self.table.cols();
 
         for ele in self.table.iter() {
+            // println!("{:?}", &ele);
             if ele.1.0 == nrows - 1 && ele.1.1 != ncols - 1{
                 if max_entry < *ele.0 {
                     max_entry = *ele.0;
@@ -105,11 +106,12 @@ impl SimplexTable {
                 }
             }
         }
+        println!("Entry: {}", entry_var.unwrap());
         entry_var
     }
 
     fn get_exit_var(&self, entry_var: usize) -> Option<usize> {
-        let mut exit_var = Some(1);
+        let mut exit_var = None;
         // let mut min_entry = i32::MAX;
         let mut min_entry = 100000;
         // let row_size: usize = self.table.shape()[0];
@@ -117,7 +119,7 @@ impl SimplexTable {
         let nrows = self.table.rows();
         let ncols = self.table.cols();
 
-        for row_idx in 0..(nrows - 2) {
+        for row_idx in 1..(nrows - 1) {
             let row_view = self.table
                             .outer_view(row_idx)
                             .unwrap();
@@ -144,69 +146,99 @@ impl SimplexTable {
         //         exit_var = Some(self.base[i - 1]);
         //     }
         // }
+        println!("Exit: {}", exit_var.unwrap());
         exit_var
     }
 
     fn step(&mut self, entry_var: usize, exit_var: usize) {
+        // println!("{:?}", self.table.to_dense());
         let exit_row_idx = self.base.iter().position(|x| *x == exit_var).unwrap();
+        // let (indptr, indices, data) = self.table.clone().into_raw_storage();
 
-        //-------------------------------------- CST -----------------------------------------
+        let exit_view = self.table.outer_view(exit_row_idx).unwrap();
+        let exit_row_view = exit_view.row_view::<usize>().to_csr();
 
-        let pivot_range = &self.table.indptr().outer_inds_sz(exit_row_idx);
-        let pivot_row_idxs = &self.table.indices()[pivot_range.start..pivot_range.end];
-        let pivot_row_data = &self.table.data()[pivot_range.start..pivot_range.end];
+        // let table_slice = self.table.slice_outer(1..);
 
-        let p_index = pivot_row_idxs.iter().position(|x| *x == entry_var).unwrap();
-        let pivot = pivot_row_data[p_index];
+        let table_csc = self.table.clone().to_csc();
+        let entry_view = table_csc.outer_view(entry_var).unwrap();
+        let entry_col_view = entry_view.col_view::<usize>().to_csr();
 
-        // if pivot != 1 {
-        //     self.table.outer_view(exit_row_idx).unwrap().map(|x| x/pivot);
-        // }
+        let factor_matrix = &entry_col_view * &exit_row_view;
 
-        let nrows = self.table.rows();
-        let mut table_copy = self.table.clone();
-
-        for i in 0..(nrows) {
-            let row_range = self.table.indptr().outer_inds_sz(i);
-            let row_idxs = &self.table.indices()[row_range.start..row_range.end];
-            let row_data = &self.table.data()[row_range.start..row_range.end];
-
-            if i == exit_row_idx { continue }
-            else {
-                if row_idxs.contains(&entry_var) {
-                    println!("{:?}  {}", row_idxs, i);
-
-                    let r_index = row_idxs.iter().position(|x| *x == entry_var).unwrap();
-                    let factor = row_data[r_index] / pivot;
-
-                    println!("{:?}  {}", r_index, factor);
-                    println!("{:?}", &pivot_row_idxs);
-
-                    for col_idx in pivot_row_idxs { 
-                        let pivot_index = pivot_row_idxs.iter().position(|x| *x == *col_idx).unwrap();
-                        
-                        let mut new_ele = 0;
-                        if row_idxs.contains(&col_idx){
-                            let row_index = row_idxs.iter().position(|x| *x == *col_idx).unwrap();
-                            new_ele = row_data[row_index] - pivot_row_data[pivot_index] * factor;
-                        }
-                        else{
-                            new_ele = - pivot_row_data[pivot_index] * factor;
-                        }
-
-                        table_copy.insert(i, *col_idx, new_ele);
-                    }
-                }
-            };
-
+        let mut exit_indptr: Vec<usize> = Vec::new();
+        for i in 0..(self.table.rows() + 1) {
+            if i <= exit_row_idx { exit_indptr.push(0); }
+            else { exit_indptr.push(exit_view.data().len()); }
         }
-
-        self.table = table_copy;
+        let exit_matrix = CsMat::new((self.table.rows(), self.table.cols()),
+                                    exit_indptr.clone(),
+                                    exit_view.indices().to_vec(),
+                                    exit_view.data().to_vec());
+        // println!("{:?}", exit_matrix.to_dense());
         
-        println!("{:?}", self.table.to_dense());
-        // println!("{:?}", pivot);
-        // println!("{:?}", pivot_row_idxs);
-        // println!("{:?}", pivot_row_data);
+        let middle = &self.table - &factor_matrix;
+        self.table = &middle + &exit_matrix;
+        // println!("{:?}", self.table.to_dense());
+
+        // //-------------------------------------- CST -----------------------------------------
+        // let nrows = self.table.rows();
+        // let ncols = self.table.cols();
+
+        
+        // let costs_start_indx = indptr[0];
+        // let costs_end_indx = indptr[1];
+        // let costs_row_idxs = &indices[costs_start_indx..costs_end_indx];
+        // let costs_row_data = &data[costs_start_indx..costs_end_indx];
+        
+
+        // let pivot_start_indx = indptr[exit_row_idx];
+        // let pivot_end_indx = indptr[exit_row_idx + 1];
+        // let pivot_row_idxs = &indices[pivot_start_indx..pivot_end_indx];
+        // let pivot_row_data = &data[pivot_start_indx..pivot_end_indx];
+
+        // // println!("{:?}", pivot_row_idxs);
+        // // println!("{:?}", pivot_row_data);
+        // // println!("{:?}", costs_row_idxs);
+        // // println!("{:?}", costs_row_data);
+
+        // let pivot_index = pivot_row_idxs.iter().position(|x| *x == entry_var).unwrap();
+        // let pivot = pivot_row_data[pivot_index];
+
+        // // println!("{:?}", pivot);
+
+        // for row_idx in 1..(nrows) {
+        //     if row_idx == exit_row_idx { continue };
+
+        //     let row_start_indx = indptr[row_idx];
+        //     let row_end_indx = indptr[row_idx + 1];
+        //     let row_idxs = &indices[row_start_indx..row_end_indx];
+        //     let row_data = &data[row_start_indx..row_end_indx];
+            
+
+        //     if row_idxs.contains(&entry_var) {
+        //         let r_index = row_idxs.iter().position(|x| *x == entry_var).unwrap();
+        //         let factor = row_data[r_index] / pivot;
+
+        //         for col_idx in pivot_row_idxs.iter() { 
+        //             let pivot_index = pivot_row_idxs.iter().position(|x| *x == *col_idx).unwrap();
+                    
+        //             let mut new_ele = 0;
+        //             if row_idxs.contains(&col_idx){
+        //                 let row_index = row_idxs.iter().position(|x| *x == *col_idx).unwrap();
+        //                 new_ele = row_data[row_index] - pivot_row_data[pivot_index] * factor;
+
+        //                 // data[row_idx*ncols + *col_idx] = new_ele;
+        //                 // self.table.set(row_idx, *col_idx, new_ele);
+        //             }
+        //             else{
+        //                 new_ele = - pivot_row_data[pivot_index] * factor;
+        //                 // self.table.insert(row_idx, *col_idx, new_ele);
+        //             }
+        //             self.table.insert(row_idx, *col_idx, new_ele);
+        //         }
+        //     }
+        // }
 
         // -------------------------------------- Simple Cycling -----------------------------------------
 
@@ -236,88 +268,134 @@ impl SimplexTable {
             .iter_mut()
             .map(|x| if *x == exit_var { entry_var } else { *x })
             .collect();
+        
+       
+        // //------------------------------------ Target update section -----------------------------
+        // let mut target: i32 = 0;
+        // for (j, basis_idx) in self.base.iter().enumerate() {
+        //     if costs_row_idxs.contains(&basis_idx) {
+        //         let cost_index = costs_row_idxs.iter().position(|x| *x == *basis_idx).unwrap();
+        //         target += self.table.get(j + 1, ncols - 1).unwrap() * costs_row_data[cost_index];
+        //     }
+        // }
+        // println!("{}", target);
+        // self.table.insert(nrows - 1, ncols - 1, target);
+
+        // //------------------------------------ Costst update section -----------------------------
+        // for i in 0..(ncols - 1) {
+        //     let mut delta: i32 = 0;
+
+        //     for (j, basis_idx) in self.base.iter().enumerate() {
+        //         let row = self.table.outer_view(j + 1).unwrap();
+
+        //         if costs_row_idxs.contains(&basis_idx) && row.indices().contains(&i) {
+        //             let cost_index = costs_row_idxs.iter().position(|x| *x == *basis_idx).unwrap();
+        //             delta += row[i] * costs_row_data[cost_index];
+        //         }
+        //     }
+        //     if costs_row_idxs.contains(&i) {
+        //         let cost_index = costs_row_idxs.iter().position(|x| *x == i).unwrap();
+        //         delta -= costs_row_data[cost_index];
+        //     }
+        //     self.table.insert(nrows - 1, i, delta);
+        // }
+        
+        // println!("{:?}", self.table.to_dense());
     }
 
-//     pub fn solve(&mut self) -> SimplexOutput {
-//         let mut counter: i32 = 0;
-//         loop {
-//             counter += 1;
+    pub fn solve(&mut self) -> SimplexOutput {
+        let mut counter: i32 = 0;
+        loop {
+            counter += 1;
 
-//             if let Some(entry_var) = self.get_entry_var() {
-//                 if let Some(exit_var) = self.get_exit_var(entry_var) {
-//                     self.step(entry_var, exit_var);
-//                 } else {
-//                     return SimplexOutput::InfiniteSolution;
-//                 }
-//             } else {
-//                 panic!("Can't continue");
-//             }
-//             // println!("All elements:");
-//             // for row_iter in self.table.rows_iter() {
-//             //     for element in row_iter {
-//             //         print!("{} ", element);
-//             //     }
-//             //     println!();
-//             // }
-//             let mut optimum = true;
-//             let mut unique = true;
-//             let nrows = self.table.shape()[0];
-//             let ncols = self.table.shape()[1];
+            if let Some(entry_var) = self.get_entry_var() {
+                if let Some(exit_var) = self.get_exit_var(entry_var) {
+                    self.step(entry_var, exit_var);
+                } else {
+                    return SimplexOutput::InfiniteSolution;
+                }
+            } else {
+                panic!("Can't continue");
+            }
+            
+            let mut optimum = true;
+            let mut unique = true;
 
-//             for i in 0..(ncols - 1) {
-//                 // if i == ncols - 1 { continue; }
-//                 let z = self.table[(nrows - 1, i)];
-//                 optimum = optimum && z <= 0;
-//                 if !self.base.contains(&i) && i < self.objective.len() {
-//                     unique = unique && z - self.objective[i] < 0;
-//                 }
-//             }
-//             if optimum {
-//                 let optimum = self.table[(self.table.shape()[0] - 1, self.table.shape()[1] - 1)];
-//                 // for (i, var) in self.base.iter().enumerate() {
-//                 //     if self.vars[*var].is_artificial() {
-//                 //         if self.table.row(i + 1)[self.table.ncols() - 1] > 0.0 {
-//                 //             /* Artificial variable might have taken slack var value */
-//                 //             if self.vars[*var - 2].is_slack() {
-//                 //                 if self.table.row(nrows - 1)[*var - 1] == 0.0 {
-//                 //                     continue;
-//                 //                 }
-//                 //             }
-//                 //             return SimplexOutput::NoSolution;
-//                 //         }
-//                 //     }
-//                 // }
+            let nrows = self.table.rows();
+            let ncols = self.table.cols();
+
+            let costs_view = self.table.outer_view(nrows - 1).unwrap();
+            let costs_idxs = costs_view.indices();
+            // let costs_data = costs_view.data();
+            // let nrows = self.table.shape()[0];
+            // let ncols = self.table.shape()[1];
+
+            for i in 0..(ncols - 1) {
+                // if i == ncols - 1 { continue; }
+                // let z = self.table[(nrows - 1, i)];
+                let mut z: i32 = 0;
+                if costs_idxs.contains(&i) {
+                    z = costs_view[i];
+                }
+                optimum = optimum && z <= 0;
+                if !self.base.contains(&i) && i < self.objective.len() {
+                    unique = unique && z - self.objective[i] < 0;
+                }
+            }
+            if optimum {
+                let optimum = self.table.get(nrows - 1, ncols - 1).unwrap();
+                // let optimum = self.table[(self.table.shape()[0] - 1, self.table.shape()[1] - 1)];
+                // for (i, var) in self.base.iter().enumerate() {
+                //     if self.vars[*var].is_artificial() {
+                //         if self.table.row(i + 1)[self.table.ncols() - 1] > 0.0 {
+                //             /* Artificial variable might have taken slack var value */
+                //             if self.vars[*var - 2].is_slack() {
+                //                 if self.table.row(nrows - 1)[*var - 1] == 0.0 {
+                //                     continue;
+                //                 }
+                //             }
+                //             return SimplexOutput::NoSolution;
+                //         }
+                //     }
+                // }
     
-//                 if unique {
-//                     println!("Unique, loop counts: {}", counter);
-//                     return SimplexOutput::UniqueOptimum(optimum);
-//                 } else {
-//                     println!("Multiple, loop counts: {}", counter);
-//                     return SimplexOutput::MultipleOptimum(optimum);
-//                 }
-//             }
-//             // if counter > 150 {
-//             //     let sub_optimum = self.table[(self.table.num_rows() - 1, self.table.num_columns() - 1)];
-//             //     return SimplexOutput::SubOptimum(sub_optimum);
-//             // }
-//         }
-//     }
+                if unique {
+                    println!("Unique, loop counts: {}", counter);
+                    return SimplexOutput::UniqueOptimum(*optimum);
+                } else {
+                    println!("Multiple, loop counts: {}", counter);
+                    return SimplexOutput::MultipleOptimum(*optimum);
+                }
+            }
+            // if counter > 20 {
+            //     let optimum = self.table.get(nrows - 1, ncols - 1).unwrap();
+            //     println!("Suboptimum, loop counts: {}", counter);
+            //     return SimplexOutput::UniqueOptimum(*optimum);
+            // }
+            // if counter > 150 {
+            //     let sub_optimum = self.table[(self.table.num_rows() - 1, self.table.num_columns() - 1)];
+            //     return SimplexOutput::SubOptimum(sub_optimum);
+            // }
+        }
+    }
 
-//     pub fn get_var(&self, var: usize) -> Option<i32> {
-//         if var > self.objective.len() {
-//             return None;
-//         }
-//         for (i, v) in self.base.iter().enumerate() {
-//             if *v == var {
-//                 return Some(self.table[(i + 1, self.table.shape()[1] - 1)]);
-//             }
-//         }
-//         return Some(0);
-//     }
+    pub fn get_var(&self, var: usize) -> Option<&i32> {
+        if var > self.objective.len() {
+            return None;
+        }
+        for (i, v) in self.base.iter().enumerate() {
+            if *v == var {
+                // return Some(self.table[(i + 1, self.table.shape()[1] - 1)]);
+                return self.table.get(i, self.table.cols() - 1);
+            }
+        }
+        return Some(&0);
+    }
 
-//     pub fn get_target(&self) -> Option<i32> {
-//         return Some(self.table[(self.table.shape()[0] - 1, self.table.shape()[1] - 1)]);
-//     }
+    pub fn get_target(&self) -> Option<&i32> {
+        // return Some(self.table[(self.table.shape()[0] - 1, self.table.shape()[1] - 1)]);
+        return self.table.get(self.table.rows() - 1, self.table.cols() - 1);
+    }
 }
 
 pub struct SimplexMinimizerBuilder {
@@ -414,11 +492,15 @@ impl SimplexMinimizerBuilder {
                                 .unwrap();
         
         let nrows = table.shape()[0] - 1;
+        // let nrows = table.shape()[0];
         let ncols = table.shape()[1];
         let mut table_trimat = TriMat::new((nrows, ncols));
         for (i, ele) in table.slice(s![1.., ..]).iter().enumerate() {
             if *ele != 0 { table_trimat.add_triplet((i - i%ncols)/ncols, i%ncols, *ele)};
         }
+        // for (i, ele) in table.iter().enumerate() {
+        //     if *ele != 0 { table_trimat.add_triplet((i - i%ncols)/ncols, i%ncols, *ele)};
+        // }
         let mut table_cst: CsMat<_> = table_trimat.to_csr();
 
         SimplexTable {
@@ -502,39 +584,40 @@ pub fn simplex_optimize () {
     let mut simplex = Simplex::minimize(&costs_data).with(constraints);
 
     // let mut simplex = program.unwrap();
-    println!("{:?}", simplex.table.to_dense());
+    // println!("{:?}", simplex.table);
 
-    let mut evar = simplex.get_entry_var().unwrap();
-    let mut exitvar = simplex.get_exit_var(evar);
-    println!("{:?}  {:?}", evar, exitvar.unwrap());
-    simplex.step(evar, exitvar.unwrap());
+    // let mut evar = simplex.get_entry_var().unwrap();
+    // let mut exitvar = simplex.get_exit_var(evar);
+    // // println!("{:?}", evar);
+    // println!("{:?}  {:?}", evar, exitvar.unwrap());
+    // simplex.step(evar, exitvar.unwrap());
 
-    evar = simplex.get_entry_var().unwrap();
-    exitvar = simplex.get_exit_var(evar);
-    println!("{:?}  {:?}", evar, exitvar.unwrap());
-    simplex.step(evar, exitvar.unwrap());
+    // evar = simplex.get_entry_var().unwrap();
+    // exitvar = simplex.get_exit_var(evar);
+    // println!("{:?}  {:?}", evar, exitvar.unwrap());
+    // simplex.step(evar, exitvar.unwrap());
 
-    evar = simplex.get_entry_var().unwrap();
-    exitvar = simplex.get_exit_var(evar);
-    println!("{:?}  {:?}", evar, exitvar.unwrap());
-    simplex.step(evar, exitvar.unwrap());
+    // evar = simplex.get_entry_var().unwrap();
+    // exitvar = simplex.get_exit_var(evar);
+    // println!("{:?}  {:?}", evar, exitvar.unwrap());
+    // simplex.step(evar, exitvar.unwrap());
 
-    evar = simplex.get_entry_var().unwrap();
-    exitvar = simplex.get_exit_var(evar);
-    println!("{:?}  {:?}", evar, exitvar.unwrap());
-    simplex.step(evar, exitvar.unwrap());
+    // evar = simplex.get_entry_var().unwrap();
+    // exitvar = simplex.get_exit_var(evar);
+    // println!("{:?}  {:?}", evar, exitvar.unwrap());
+    // simplex.step(evar, exitvar.unwrap());
 
-    // match simplex.solve() {
-    //     SimplexOutput::UniqueOptimum(x) => println!("{}", x),
-    //     SimplexOutput::MultipleOptimum(x) => println!("{}", x),
-    //     _ => panic!("No solution or unbounded"),
-    // }
+    match simplex.solve() {
+        SimplexOutput::UniqueOptimum(x) => println!("{}", x),
+        SimplexOutput::MultipleOptimum(x) => println!("{}", x),
+        _ => panic!("No solution or unbounded"),
+    }
 
-    // let mut assigns: i32 = 0;
-    // for p in 0..problem_size {
-    //     assigns += simplex.get_var(p).unwrap();
-    //     // println!("x{}: {}", p, simplex.get_var(p).unwrap());
-    // }
-    // println!("Total assigned amount: {}", assigns);
-    // println!("Total problem cost: {}", simplex.get_target().unwrap());
+    let mut assigns: i32 = 0;
+    for p in 0..problem_size {
+        assigns += simplex.get_var(p).unwrap();
+        // println!("x{}: {}", p, simplex.get_var(p).unwrap());
+    }
+    println!("Total assigned amount: {}", assigns);
+    println!("Total problem cost: {}", simplex.get_target().unwrap());
 }
