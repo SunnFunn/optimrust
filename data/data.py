@@ -69,6 +69,6 @@ if __name__ == "__main__":
     #                             total_amount=length*node_amount,
     #                             node_amount=node_amount,
     #                             length=length)
-    data = data_initialize(supply_length=450, demand_length=450,
+    data = data_initialize(supply_length=1000, demand_length=1000,
                            host="0.0.0.0", port=6379, db=0, password="alext")
     # print(data[:])
